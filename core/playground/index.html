@@ -1,0 +1,12 @@
+<html>
+	<head></head>
+	<body>
+		<gui-element name="${Gui.model.test}">
+			Hello ${Gui.model.test | link "http://google.com\"" "test" | toUpperCase}!
+			<gui-print/>
+		</gui-element>
+		<input type="text" data-bind-to="Gui.model.test" data-bind-on="input">
+		<script src="tectonic.js"></script>
+		<script>Gui.model.test = "John"</script>
+	</body>
+</html>
