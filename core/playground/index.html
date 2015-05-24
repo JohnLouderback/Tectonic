@@ -1,12 +1,19 @@
 <html>
 	<head></head>
 	<body>
-		<gui-element name="${Gui.model.test}">
-			Hello ${Gui.model.test | link "http://google.com\"" "test" | toUpperCase}!
-			<gui-print/>
-		</gui-element>
-		<input type="text" data-bind-to="Gui.model.test" data-bind-on="input">
+		<app-element name="${App.model.test}">
+			Hello ${App.model.firstName + " " + App.model.lastName | toUpperCase}!<br>
+			<!--<app-print value="App.model.test | link 'http://google.com' | toUpperCase"/>-->
+		</app-element><br>
+		<input type="text" data-bind-to="App.model.firstName" data-bind-on="input" placeholder="First Name">
+		<br>
+		<input type="text" data-bind-to="App.model.lastName" data-bind-on="input" placeholder="Last Name">
 		<script src="tectonic.js"></script>
-		<script>Gui.model.test = "John"</script>
+		<script>
+		App.model = {
+			firstName: "",
+			lastName: ""
+		}
+		</script>
 	</body>
 </html>

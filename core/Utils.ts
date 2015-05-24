@@ -6,6 +6,7 @@ export class Utils {
 
 	public static processTemplateThroughPipes(value) {
 		var value = value.split(/(?!\[.*?|.*?\])\|/g);
+		console.log(value);
 		var returnVal = eval(value[0].trim());
 		if(typeof returnVal !== 'undefined') {
 			returnVal = String(returnVal).trim();
@@ -14,19 +15,24 @@ export class Utils {
 			} else {
 				for (var i = 1; i < value.length; i++) {
 					var func = value[i].trim();
-					var args = Gui.Utils.splitParametersBySpaces(func);
+					var args = App.Utils.splitParametersBySpaces(func);
 					for (var n = 1; n < args.length; n++) {
-						args[n] = Gui.Utils.unwrapQuotes(Gui.Utils.castStringToType(args[n]));
+						args[n] = App.Utils.unwrapQuotes(App.Utils.castStringToType(args[n]));
 					}
 					func = args.shift();
-					if (typeof Gui.Pipes[func] !== 'undefined') {
+					if (typeof App.Pipes[func] !== 'undefined') {
 						args.unshift(returnVal);
-						returnVal = Gui.Pipes[func](returnVal, args);
+						returnVal = App.Pipes[func](returnVal, args);
 					} else if (typeof String(returnVal)[func] !== 'undefined') {
 						returnVal = window['String']['prototype'][func].apply(returnVal, args);
 					}
 				}
-				return returnVal;
+				// If the value is not defined or otherwise a value we don't want to display
+				if (typeof returnVal === 'undefined' || String(returnVal).toLowerCase() === 'nan' || String(returnVal).toLowerCase() === 'undefined') {
+					return ""; // Return an empty stirng
+				} else { // If the value is good to display
+					return returnVal; // Return the value
+				}
 			}
 		} else {
 			return '';
@@ -65,7 +71,6 @@ export class Utils {
 			lastChar = currChar;
 		}
 		arr.push(string.substr(lastSpace + 1, (string.length - 1) - lastSpace).trim());
-		console.log(arr);
 		return arr;
 	}
 
@@ -100,9 +105,9 @@ export module Utils {
 		public static observeObjects (unobserve: boolean, objectToObserve: Object|Array<any>, objectLocationString?: string, previousObjects?: Array<Object>): void {
 			//LOOP THROUGH ALL SUPPLIED MODELS AND RECURSIVELY OBSERVE OBJECTS WITHIN OBJECTS
 			var observationAction: string = unobserve ? 'unobserve' : 'observe';//Variable used to decide which function is called depending on whether we're observing or unobserving.
-			var witnessedObjects: Object = Gui.Utils.Observe.witnessedObjects;
-			var observerFunctions: Object = Gui.Utils.Observe.observerFunctions;
-			var observeObjects: Function = Gui.Utils.Observe.observeObjects;
+			var witnessedObjects: Object = App.Utils.Observe.witnessedObjects;
+			var observerFunctions: Object = App.Utils.Observe.observerFunctions;
+			var observeObjects: Function = App.Utils.Observe.observeObjects;
 			previousObjects = previousObjects || [];//array of previously observed objects. We keep this to prevent redundant observation in circular structures
 
 			for (var key in objectToObserve) {
@@ -110,7 +115,7 @@ export module Utils {
 					var value = objectToObserve[key];
 					if ((value !== null && //check if value is not null
 					(typeof value === 'object' || Array.isArray(value))) && //and it is an object or an array
-					!Gui.Utils.isElement(value) && //and also not a DOM element
+					!App.Utils.isElement(value) && //and also not a DOM element
 					(function () { //finally check that this object is not reference to a previously observed object
 						var wasNotSeen = true;
 						previousObjects.forEach(function (object) {
@@ -149,15 +154,15 @@ export module Utils {
 									observeObjects(unobserve, value, thisLocation, previousObjects);//Observe this object or array and all of its obserable children.
 								}
 
-								//setElementsToValue($element, newValue);
-								Gui.Utils.Observe.setElementsToValue(Gui.elementToModelMap, modelPath, newValue);
+								App.Utils.Observe.setElementsToValue(App.elementToModelMap, modelPath, newValue);
+								App.Utils.Observe.updateSubscribedElements(App.subscribedElementsToModelMap, modelPath);
 
 								if (Array.isArray(newValue))//If the new value is an array
 									var logValue = JSON.stringify(newValue);//set the logging value as a stringified array
 								else//Otherwise...
 									logValue = "'" + newValue + "'";//display as a quoted string.
 
-								console.log(thisLocation + key + " is now equal to " + logValue + " as observed in the model.");
+								//console.log(thisLocation + key + " is now equal to " + logValue + " as observed in the model.");
 
 								/*if (typeof options.modelChangeCallback === "function") {//If there is a callback function specified by the user
 									console.log("Model change callback executed for change in " + thisLocation + key);//show log information
@@ -187,17 +192,31 @@ export module Utils {
 		}
 
 		public static setElementsToValue(elementsObject, modelLocation, value) {
-			var boundElements = document.querySelectorAll('input[data-bind-to="Gui.' + modelLocation + '"]:not([data-bind-on]), input[data-bind-to="Gui.' + modelLocation + '"][data-bind-on=input]');
+			var boundElements = document.querySelectorAll('input[data-bind-to="App.' + modelLocation + '"]:not([data-bind-on]), input[data-bind-to="App.' + modelLocation + '"][data-bind-on=input]');
 			for (var i = 0; i < boundElements.length; i++) {
-				Gui.Dom.twoWayBinderInHandler(boundElements[i], value);
+				App.Dom.twoWayBinderInHandler(boundElements[i], value);
 			}
-			elementsObject[modelLocation].forEach(function(node) {
-				if(node instanceof Node || node instanceof HTMLElement) {
-					Gui.Dom.templateRenderForTextNode(node, '__template');
-				} else {
-					Gui.Dom.templateRenderForAttribute(node.element, node.attribute, true);
-				}
-			});
+			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
+				elementsObject.get(modelLocation).forEach(function (node) {
+					if (node instanceof Node || node instanceof HTMLElement) {
+						App.Dom.templateRenderForTextNode(node, '__template');
+					} else {
+						App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
+					}
+				});
+			}
+		}
+
+		public static updateSubscribedElements(elementsObject, modelLocation) {
+			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
+				elementsObject.get(modelLocation).forEach(function(item: SubscribedElement) {
+					item.attributes.forEach(function(attribute) {
+						attribute.callbacks.forEach(function(callback) {
+							callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+						});
+					});
+				});
+			}
 		}
 	}
 }

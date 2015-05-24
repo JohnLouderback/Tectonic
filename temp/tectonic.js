@@ -1,5 +1,3 @@
-"use strict";
-
 // Copyright 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1396,30 +1394,52 @@ var MutationSummary = (function () {
 	};
 	return MutationSummary;
 })();
-class Gui {
-    static set model(value) {
-        Gui.internalModelWrapper.model = value;
-        Gui.Utils.Observe.observeObjects(false, Gui.internalModelWrapper);
+
+////////////////////////////////
+/// <reference path="lib.es6.d.ts"/>
+var __extends = this.__extends || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var App = (function () {
+    function App() {
     }
-    static get model() {
-        return Gui.internalModelWrapper.model;
-    }
-    static initialize() {
-        Gui.Utils.Observe.observeObjects(false, Gui.internalModelWrapper);
-        Gui.Dom.initialize();
-    }
-}
-Gui.regexForTemplate = '\\$\\{(.*?)\\}';
-Gui.internalModelWrapper = { model: {} };
-Gui.elementToModelMap = {};
-(function (Gui_1) {
-    class Utils {
-        static isElement(o) {
+    Object.defineProperty(App, "model", {
+        get: function () {
+            return App.internalModelWrapper.model;
+        },
+        set: function (value) {
+            App.internalModelWrapper.model = value;
+            App.Utils.Observe.observeObjects(false, App.internalModelWrapper);
+        },
+        enumerable: true,
+        configurable: true
+    });
+    App.initialize = function () {
+        App.Utils.Observe.observeObjects(false, App.internalModelWrapper);
+        App.Dom.initialize();
+    };
+    App.internalModelWrapper = { model: {} };
+    App.regexForTemplate = '\\$\\{(.*?)\\}';
+    App.regexForModelPaths = '((App|this)\\.(.*?)(?!\\[.*?|.*?\\])(?:\\||$|\\n|\\*|\\+|\\\\|\\-|\\s|\\(|\\)|\\|\\||&&|\\?|\\:|\\!))';
+    App.elementToModelMap = new Map([['', []]]);
+    App.subscribedElementsToModelMap = new Map([['', []]]);
+    return App;
+})();
+var App;
+(function (App_1) {
+    var Utils = (function () {
+        function Utils() {
+        }
+        Utils.isElement = function (o) {
             return (typeof HTMLElement === "object" ? o instanceof HTMLElement :
                 o && typeof o === "object" && o !== null && o.nodeType === 1 && typeof o.nodeName === "string");
-        }
-        static processTemplateThroughPipes(value) {
+        };
+        Utils.processTemplateThroughPipes = function (value) {
             var value = value.split(/(?!\[.*?|.*?\])\|/g);
+            console.log(value);
             var returnVal = eval(value[0].trim());
             if (typeof returnVal !== 'undefined') {
                 returnVal = String(returnVal).trim();
@@ -1429,27 +1449,32 @@ Gui.elementToModelMap = {};
                 else {
                     for (var i = 1; i < value.length; i++) {
                         var func = value[i].trim();
-                        var args = Gui.Utils.splitParametersBySpaces(func);
+                        var args = App.Utils.splitParametersBySpaces(func);
                         for (var n = 1; n < args.length; n++) {
-                            args[n] = Gui.Utils.unwrapQuotes(Gui.Utils.castStringToType(args[n]));
+                            args[n] = App.Utils.unwrapQuotes(App.Utils.castStringToType(args[n]));
                         }
                         func = args.shift();
-                        if (typeof Gui.Pipes[func] !== 'undefined') {
+                        if (typeof App.Pipes[func] !== 'undefined') {
                             args.unshift(returnVal);
-                            returnVal = Gui.Pipes[func](returnVal, args);
+                            returnVal = App.Pipes[func](returnVal, args);
                         }
                         else if (typeof String(returnVal)[func] !== 'undefined') {
                             returnVal = window['String']['prototype'][func].apply(returnVal, args);
                         }
                     }
-                    return returnVal;
+                    if (typeof returnVal === 'undefined' || String(returnVal).toLowerCase() === 'nan' || String(returnVal).toLowerCase() === 'undefined') {
+                        return "";
+                    }
+                    else {
+                        return returnVal;
+                    }
                 }
             }
             else {
                 return '';
             }
-        }
-        static splitParametersBySpaces(string) {
+        };
+        Utils.splitParametersBySpaces = function (string) {
             var string = string;
             var arr = [];
             var inQuoteDouble = false;
@@ -1485,10 +1510,9 @@ Gui.elementToModelMap = {};
                 lastChar = currChar;
             }
             arr.push(string.substr(lastSpace + 1, (string.length - 1) - lastSpace).trim());
-            console.log(arr);
             return arr;
-        }
-        static castStringToType(string) {
+        };
+        Utils.castStringToType = function (string) {
             if (string.trim().toLowerCase() === 'true') {
                 return true;
             }
@@ -1498,8 +1522,8 @@ Gui.elementToModelMap = {};
             else {
                 return string;
             }
-        }
-        static unwrapQuotes(string) {
+        };
+        Utils.unwrapQuotes = function (string) {
             var string = string.trim();
             var firstChar = string.substr(0, 1);
             var lastChar = string.substr(string.length - 1);
@@ -1510,24 +1534,27 @@ Gui.elementToModelMap = {};
                 string = string.substr(1, string.length - 2).replace(/\\'/g, "'");
             }
             return string;
-        }
-    }
-    Gui_1.Utils = Utils;
+        };
+        return Utils;
+    })();
+    App_1.Utils = Utils;
+    var Utils;
     (function (Utils) {
-        class Observe {
-            static observeObjects(unobserve, objectToObserve, objectLocationString, previousObjects) {
-                //LOOP THROUGH ALL SUPPLIED MODELS AND RECURSIVELY OBSERVE OBJECTS WITHIN OBJECTS
-                var observationAction = unobserve ? 'unobserve' : 'observe'; //Variable used to decide which function is called depending on whether we're observing or unobserving.
-                var witnessedObjects = Gui.Utils.Observe.witnessedObjects;
-                var observerFunctions = Gui.Utils.Observe.observerFunctions;
-                var observeObjects = Gui.Utils.Observe.observeObjects;
-                previousObjects = previousObjects || []; //array of previously observed objects. We keep this to prevent redundant observation in circular structures
+        var Observe = (function () {
+            function Observe() {
+            }
+            Observe.observeObjects = function (unobserve, objectToObserve, objectLocationString, previousObjects) {
+                var observationAction = unobserve ? 'unobserve' : 'observe';
+                var witnessedObjects = App.Utils.Observe.witnessedObjects;
+                var observerFunctions = App.Utils.Observe.observerFunctions;
+                var observeObjects = App.Utils.Observe.observeObjects;
+                previousObjects = previousObjects || [];
                 for (var key in objectToObserve) {
                     if (objectToObserve.hasOwnProperty(key) || Array.isArray(objectToObserve)) {
                         var value = objectToObserve[key];
                         if ((value !== null &&
                             (typeof value === 'object' || Array.isArray(value))) &&
-                            !Gui.Utils.isElement(value) &&
+                            !App.Utils.isElement(value) &&
                             (function () {
                                 var wasNotSeen = true;
                                 previousObjects.forEach(function (object) {
@@ -1536,8 +1563,8 @@ Gui.elementToModelMap = {};
                                 });
                                 return wasNotSeen;
                             })()) {
-                            previousObjects.push(value); //add this object to the array of previously seen objects.
-                            var thisLocation = ""; //variable for storing the current location
+                            previousObjects.push(value);
+                            var thisLocation = "";
                             if (typeof objectLocationString === "undefined")
                                 thisLocation = "" + key;
                             else {
@@ -1548,148 +1575,152 @@ Gui.elementToModelMap = {};
                                     thisLocation = objectLocationString + "." + key;
                                 }
                             }
-                            witnessedObjects[thisLocation] = value; //Add this object or array to the witnessedObjects object which contains a mapping of locations to object or arrays
-                            //OBSERVE CHANGES IN MODEL'S DATASTRUCTURE TO REFLECT
+                            witnessedObjects[thisLocation] = value;
                             var changeHandlerFunction = observerFunctions[thisLocation] ? observerFunctions[thisLocation] : function (changes) {
                                 changes.forEach(function (change) {
-                                    var key = !isNaN(change.name) ? '[' + change.name + ']' : '.' + change.name; //set key based on whether the key is an array index or object property.
+                                    var key = !isNaN(change.name) ? '[' + change.name + ']' : '.' + change.name;
                                     var modelPath = thisLocation + key;
-                                    //var elementSelector = "[" + options.dataBindToAttr + "='" + modelPath + "'],[" + options.dataWatchingAttr + "*='" + modelPath + ",'],[" + options.dataWatchingAttr + "$='" + modelPath + "']";
                                     var newValue = change.object[change.name];
                                     var oldValue = change.oldValue;
-                                    //var $element = $(elementSelector);
                                     if (typeof newValue === 'object' || Array.isArray(newValue)) {
-                                        observeObjects(unobserve, value, thisLocation, previousObjects); //Observe this object or array and all of its obserable children.
+                                        observeObjects(unobserve, value, thisLocation, previousObjects);
                                     }
-                                    //setElementsToValue($element, newValue);
-                                    Gui.Utils.Observe.setElementsToValue(Gui.elementToModelMap, modelPath, newValue);
+                                    App.Utils.Observe.setElementsToValue(App.elementToModelMap, modelPath, newValue);
+                                    App.Utils.Observe.updateSubscribedElements(App.subscribedElementsToModelMap, modelPath);
                                     if (Array.isArray(newValue))
-                                        var logValue = JSON.stringify(newValue); //set the logging value as a stringified array
+                                        var logValue = JSON.stringify(newValue);
                                     else
-                                        logValue = "'" + newValue + "'"; //display as a quoted string.
-                                    console.log(thisLocation + key + " is now equal to " + logValue + " as observed in the model.");
-                                    /*if (typeof options.modelChangeCallback === "function") {//If there is a callback function specified by the user
-                                        console.log("Model change callback executed for change in " + thisLocation + key);//show log information
-                                        options.modelChangeCallback({
-                                            locationPathString: modelPath, //the location in the model as a string
-                                            $boundElements    : $element, //the bound elements as a jquery collection
-                                            newValue          : newValue, //the new value of the property
-                                            oldValue          : oldValue //the old value of the property
-                                        });//run it now.
-                                    }
-                                    else {
-                                            console.log("No callback supplied for model change thus no function was called");
-                                    }*/
+                                        logValue = "'" + newValue + "'";
                                 });
                             };
                             if (!observerFunctions[thisLocation])
-                                observerFunctions[thisLocation] = changeHandlerFunction; //...store it
-                            Object[observationAction](value, changeHandlerFunction); //use this function for handling model changes
-                            observeObjects(unobserve, value, thisLocation, previousObjects); //recursively observe this object or array.
+                                observerFunctions[thisLocation] = changeHandlerFunction;
+                            Object[observationAction](value, changeHandlerFunction);
+                            observeObjects(unobserve, value, thisLocation, previousObjects);
                         }
                     }
                 }
-            }
-            static setElementsToValue(elementsObject, modelLocation, value) {
-                var boundElements = document.querySelectorAll('input[data-bind-to="Gui.' + modelLocation + '"]:not([data-bind-on]), input[data-bind-to="Gui.' + modelLocation + '"][data-bind-on=input]');
+            };
+            Observe.setElementsToValue = function (elementsObject, modelLocation, value) {
+                var boundElements = document.querySelectorAll('input[data-bind-to="App.' + modelLocation + '"]:not([data-bind-on]), input[data-bind-to="App.' + modelLocation + '"][data-bind-on=input]');
                 for (var i = 0; i < boundElements.length; i++) {
-                    Gui.Dom.twoWayBinderInHandler(boundElements[i], value);
+                    App.Dom.twoWayBinderInHandler(boundElements[i], value);
                 }
-                elementsObject[modelLocation].forEach(function (node) {
-                    if (node instanceof Node || node instanceof HTMLElement) {
-                        Gui.Dom.templateRenderForTextNode(node, '__template');
-                    }
-                    else {
-                        Gui.Dom.templateRenderForAttribute(node.element, node.attribute, true);
-                    }
-                });
-            }
-        }
-        Observe.observerFunctions = {}; //Object containing properties whose name matches the locations in the watched model and whose values are equal to the observer functions.
-        Observe.witnessedObjects = {};
+                if (typeof elementsObject.get(modelLocation) !== 'undefined') {
+                    elementsObject.get(modelLocation).forEach(function (node) {
+                        if (node instanceof Node || node instanceof HTMLElement) {
+                            App.Dom.templateRenderForTextNode(node, '__template');
+                        }
+                        else {
+                            App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
+                        }
+                    });
+                }
+            };
+            Observe.updateSubscribedElements = function (elementsObject, modelLocation) {
+                if (typeof elementsObject.get(modelLocation) !== 'undefined') {
+                    elementsObject.get(modelLocation).forEach(function (item) {
+                        item.attributes.forEach(function (attribute) {
+                            attribute.callbacks.forEach(function (callback) {
+                                callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+                            });
+                        });
+                    });
+                }
+            };
+            Observe.observerFunctions = {};
+            Observe.witnessedObjects = {};
+            return Observe;
+        })();
         Utils.Observe = Observe;
-    })(Utils = Gui_1.Utils || (Gui_1.Utils = {}));
-    class Dom {
-        static initialize() {
+    })(Utils = App_1.Utils || (App_1.Utils = {}));
+    var Dom = (function () {
+        function Dom() {
+        }
+        Dom.initialize = function () {
             var doc = document.querySelectorAll('*');
-            console.log(doc);
             for (var i = 0; i < doc.length; i++) {
-                Gui.Dom.textNodeSearch(doc[i]);
+                App.Dom.textNodeSearch(doc[i]);
                 for (var n = 0; n < doc[i].attributes.length; n++) {
-                    Gui.Dom.templateRenderForAttribute(doc[i], doc[i].attributes[n].name);
+                    App.Dom.templateRenderForAttribute(doc[i], doc[i].attributes[n].name);
                 }
             }
             var observer = new MutationSummary({
                 callback: function (summaries) {
-                    Gui.Dom.templateFinder(summaries);
+                    App.Dom.templateFinder(summaries);
                 },
                 queries: [{
                         all: true
                     }]
             });
             document.querySelector('body').addEventListener('input', function (event) {
-                Gui.Dom.twoWayBinderOutHandler(event, 'input[data-bind-to]:not([data-bind-on]), input[data-bind-to][data-bind-on=input]');
+                App.Dom.twoWayBinderOutHandler(event, 'input[data-bind-to]:not([data-bind-on]), input[data-bind-to][data-bind-on=input]');
             });
             document.querySelector('body').addEventListener('change', function (event) {
-                Gui.Dom.twoWayBinderOutHandler(event, '[data-bind-to][data-bind-on=change]');
+                App.Dom.twoWayBinderOutHandler(event, '[data-bind-to][data-bind-on=change]');
             });
-        }
-        static templateFinder(summaries) {
+        };
+        Dom.templateFinder = function (summaries) {
             summaries[0].added.forEach(function (el) {
-                Gui.Dom.textNodeSearch(el);
+                App.Dom.textNodeSearch(el);
             });
             summaries[0].characterDataChanged.forEach(function (el) {
-                Gui.Dom.textNodeSearch(el);
+                App.Dom.textNodeSearch(el);
             });
             for (var key in summaries[0].attributeChanged) {
                 var attributes = summaries[0].attributeChanged;
                 if (attributes.hasOwnProperty(key)) {
                     attributes[key].forEach(function (el) {
-                        Gui.Dom.templateRenderForAttribute(el, key);
+                        App.Dom.templateRenderForAttribute(el, key);
                     });
                 }
             }
-        }
-        static textNodeSearch(el) {
+        };
+        Dom.textNodeSearch = function (el) {
             if (el.nodeType === 3) {
-                Gui.Dom.templateRenderForTextNode(el, 'nodeValue');
+                App.Dom.templateRenderForTextNode(el, 'nodeValue');
             }
             else {
                 for (var i = 0; i < el.childNodes.length; i++) {
                     if (el.childNodes[i].nodeType === 3) {
-                        Gui.Dom.templateRenderForTextNode(el.childNodes[i], 'nodeValue');
+                        App.Dom.templateRenderForTextNode(el.childNodes[i], 'nodeValue');
                     }
                 }
             }
-        }
-        static templateRenderForTextNode(el, templateProperty) {
-            var regex = new RegExp(Gui.regexForTemplate, 'g');
-            var matches = el[templateProperty].match(regex);
+        };
+        Dom.templateRenderForTextNode = function (el, templateProperty) {
+            var regexForTemplate = new RegExp(App.regexForTemplate, 'g');
+            var regexForModelPaths = new RegExp(App.regexForModelPaths, 'g');
+            var matches = el[templateProperty].match(regexForTemplate);
             if (matches) {
-                el.__template = el[templateProperty];
-                el.nodeValue = el[templateProperty].replace(regex, function (match, submatch) {
-                    var modelPath = submatch.match(/Gui\.(.*?)(?!\[.*?|.*?\])(\||$|\n)/)[1].trim();
-                    if (typeof Gui.elementToModelMap[modelPath] === 'undefined') {
-                        Gui.elementToModelMap[modelPath] = [];
+                el['__template'] = el[templateProperty];
+                el.nodeValue = el[templateProperty].replace(regexForTemplate, function (match, submatch) {
+                    var modelPaths;
+                    while ((modelPaths = regexForModelPaths.exec(submatch)) !== null) {
+                        var modelPath = modelPaths[3].trim();
+                        if (typeof App.elementToModelMap.get(modelPath) === 'undefined') {
+                            App.elementToModelMap.set(modelPath, []);
+                        }
+                        if ((function () {
+                            var notAlreadyInModel = true;
+                            App.elementToModelMap.get(modelPath).forEach(function (node) {
+                                if (el === node) {
+                                    notAlreadyInModel = false;
+                                }
+                            });
+                            return notAlreadyInModel;
+                        }())) {
+                            App.elementToModelMap.get(modelPath).push(el);
+                        }
                     }
-                    if ((function () {
-                        var notAlreadyInModel = true;
-                        Gui.elementToModelMap[modelPath].forEach(function (node) {
-                            if (el === node) {
-                                notAlreadyInModel = false;
-                            }
-                        });
-                        return notAlreadyInModel;
-                    }())) {
-                        Gui.elementToModelMap[modelPath].push(el);
-                    }
-                    return Gui.Utils.processTemplateThroughPipes(submatch);
+                    return App.Utils.processTemplateThroughPipes(submatch);
                 });
             }
-        }
-        static templateRenderForAttribute(el, attribute, useAttributeTemplate) {
+        };
+        Dom.templateRenderForAttribute = function (el, attribute, useAttributeTemplate) {
             useAttributeTemplate = useAttributeTemplate || false;
-            var regex = new RegExp(Gui.regexForTemplate, 'g');
+            var regexForTemplate = new RegExp(App.regexForTemplate, 'g');
+            var regexForModelPaths = new RegExp(App.regexForModelPaths, 'g');
             var attributeValue;
             if (useAttributeTemplate) {
                 attributeValue = el['__' + attribute + 'Template'];
@@ -1697,33 +1728,37 @@ Gui.elementToModelMap = {};
             else {
                 attributeValue = el.getAttribute(attribute);
             }
-            var matches = attributeValue.match(regex);
+            var matches = attributeValue.match(regexForTemplate);
             if (matches) {
                 el['__' + attribute + 'Template'] = attributeValue;
-                el.setAttribute(attribute, attributeValue.replace(regex, function (match, submatch) {
-                    var modelPath = submatch.match(/Gui\.(.*?)(?!\[.*?|.*?\])(\||$|\n)/)[1].trim();
-                    if (typeof Gui.elementToModelMap[modelPath] === 'undefined') {
-                        Gui.elementToModelMap[modelPath] = [];
+                el.setAttribute(attribute, attributeValue.replace(regexForTemplate, function (match, submatch) {
+                    var modelPaths;
+                    while ((modelPaths = regexForModelPaths.exec(submatch)) !== null) {
+                        var modelPath = modelPaths[3].trim();
+                        if (typeof App.elementToModelMap.get(modelPath) === 'undefined') {
+                            App.elementToModelMap.set(modelPath, []);
+                        }
+                        if ((function () {
+                            var notAlreadyInModel = true;
+                            App.elementToModelMap.get(modelPath).forEach(function (item) {
+                                if (typeof item.nodeValue === 'undefined' && el === item.element && attribute === item.attribute) {
+                                    notAlreadyInModel = false;
+                                }
+                            });
+                            return notAlreadyInModel;
+                        }())) {
+                            var SubscribedAttrTemplate = {
+                                element: el,
+                                attribute: attribute
+                            };
+                            App.elementToModelMap.get(modelPath).push(SubscribedAttrTemplate);
+                        }
                     }
-                    if ((function () {
-                        var notAlreadyInModel = true;
-                        Gui.elementToModelMap[modelPath].forEach(function (item) {
-                            if (typeof item.nodeValue === 'undefined' && el === item.element && attribute === item.attribute) {
-                                notAlreadyInModel = false;
-                            }
-                        });
-                        return notAlreadyInModel;
-                    }())) {
-                        Gui.elementToModelMap[modelPath].push({
-                            element: el,
-                            attribute: attribute
-                        });
-                    }
-                    return Gui.Utils.processTemplateThroughPipes(submatch);
+                    return App.Utils.processTemplateThroughPipes(submatch);
                 }));
             }
-        }
-        static twoWayBinderOutHandler(event, selector) {
+        };
+        Dom.twoWayBinderOutHandler = function (event, selector) {
             var targetEl = event.target;
             if (targetEl.matches(selector)) {
                 var modelPath = targetEl.getAttribute('data-bind-to');
@@ -1736,61 +1771,111 @@ Gui.elementToModelMap = {};
                 }
                 eval(modelPath + ' = ' + value);
             }
-        }
-        static twoWayBinderInHandler(el, value) {
+        };
+        Dom.twoWayBinderInHandler = function (el, value) {
             el.value = value;
+        };
+        return Dom;
+    })();
+    App_1.Dom = Dom;
+    var Pipes = (function () {
+        function Pipes() {
         }
-    }
-    Gui_1.Dom = Dom;
-    class Pipes {
-        static toUpperCase(string) {
+        Pipes.toUpperCase = function (string) {
             return string.toUpperCase();
-        }
-    }
-    Gui_1.Pipes = Pipes;
-    class Element {
-        constructor(el) {
-            if (!Gui[this.getClassName()].registered) {
+        };
+        return Pipes;
+    })();
+    App_1.Pipes = Pipes;
+    var Element = (function () {
+        function Element(el) {
+            this.subscribedAttrs = [];
+            if (!App[this.getClassName()].registered) {
                 this.register();
             }
             if (!el) {
-                this.el = new Gui[this.getClassName()].el;
+                this.el = new App[this.getClassName()].el;
             }
             else {
                 this.el = el;
             }
             this.el['__controller'] = this;
-            this.el.setAttribute('uuid', 'test');
         }
-        getClassName() {
-            //var funcNameRegex = /function (.{1,})\(/; // This is for ES5 and ES3 Builds
-            var funcNameRegex = /class (.*?)\s*?\{/; //This is for ES6 Builds
+        Element.prototype.subscribeAttrToModelPath = function (attribute, callback) {
+            var index = 0;
+            var el = this.el;
+            var regexForModelPaths = new RegExp(App.regexForModelPaths, 'g');
+            var expression = el.getAttribute(attribute);
+            var subscribedAttribute = {
+                attribute: attribute,
+                subscribedModelPaths: []
+            };
+            var modelPaths;
+            while ((modelPaths = regexForModelPaths.exec(expression)) !== null) {
+                var modelPath = modelPaths[3].trim();
+                subscribedAttribute.subscribedModelPaths.push(modelPath);
+                if (typeof App.subscribedElementsToModelMap.get(modelPath) === 'undefined') {
+                    App.subscribedElementsToModelMap.set(modelPath, []);
+                }
+                if (!App.subscribedElementsToModelMap.get(modelPath).some(function (value) {
+                    if (value.element === el) {
+                        if (!value.attributes.some(function (attr) {
+                            if (attr.attribute === attribute) {
+                                attr.callbacks.push(callback);
+                                return true;
+                            }
+                        })) {
+                            value.attributes.push({
+                                attribute: attribute,
+                                expression: expression,
+                                callbacks: [callback]
+                            });
+                        }
+                        return true;
+                    }
+                })) {
+                    var subscribedElement = {
+                        element: el,
+                        attributes: [{
+                                attribute: attribute,
+                                expression: expression,
+                                callbacks: [callback]
+                            }]
+                    };
+                    App.subscribedElementsToModelMap.get(modelPath).push(subscribedElement);
+                }
+            }
+            this.subscribedAttrs.push(subscribedAttribute);
+            App.Utils.Observe.updateSubscribedElements(App.subscribedElementsToModelMap, modelPath);
+        };
+        Element.prototype.getClassName = function () {
+            var funcNameRegex = /function (.{1,})\(/;
             var results = (funcNameRegex).exec(this["constructor"].toString());
             return (results && results.length > 1) ? results[1] : "";
-        }
-        register() {
-            if (!Gui[this.getClassName()].registered) {
-                Gui[this.getClassName()].registered = true;
+        };
+        Element.prototype.register = function () {
+            if (!App[this.getClassName()].registered) {
+                App[this.getClassName()].registered = true;
                 var guiElement = this;
                 var document = window.document;
-                Gui[this.getClassName()].el = document.registerElement('gui-' + this.getClassName().toLowerCase(), {
+                App[this.getClassName()].el = document.registerElement('app-' + this.getClassName().toLowerCase(), {
                     prototype: Object.create(HTMLElement.prototype, {
                         createdCallback: {
                             value: function () {
                                 if (typeof this['__controller'] === 'undefined' || !this['__controller']) {
-                                    this['__controller'] = new Gui[guiElement.getClassName()](this);
+                                    this['__controller'] = new App[guiElement.getClassName()](this);
                                 }
                                 var shadow = this.createShadowRoot();
                                 var observer = new MutationSummary({
                                     callback: function (summaries) {
-                                        Gui.Dom.templateFinder(summaries);
+                                        App.Dom.templateFinder(summaries);
                                     },
                                     queries: [{
                                             all: true
                                         }],
                                     rootNode: shadow
                                 });
-                                shadow.innerHTML = "<content></content><b>I'm in the element's ${Gui.model.test} Shadow DOM!</b>";
+                                shadow.innerHTML = "<content></content>";
                             }
                         },
                         attributeChangedCallback: function () {
@@ -1798,23 +1883,31 @@ Gui.elementToModelMap = {};
                     })
                 });
             }
+        };
+        Element.registered = false;
+        return Element;
+    })();
+    App_1.Element = Element;
+    var Print = (function (_super) {
+        __extends(Print, _super);
+        function Print(e) {
+            _super.call(this, e);
+            var element = this.el;
+            this.subscribeAttrToModelPath('value', function (value) {
+                element.innerHTML = value;
+            });
         }
-    }
-    Element.registered = false;
-    Gui_1.Element = Element;
-    class Print extends Element {
-        constructor(e) {
-            super(e);
-            console.log('hi!');
-        }
-    }
-    Gui_1.Print = Print;
-})(Gui || (Gui = {}));
-for (var guiClass in Gui) {
-    if (Gui.hasOwnProperty(guiClass)) {
-        if (typeof Gui[guiClass].prototype !== "undefined" && typeof Gui[guiClass].prototype.register !== "undefined" && typeof Gui[guiClass].registered !== "undefined" && !Gui[guiClass].registered) {
-            Gui[guiClass].prototype.register();
+        return Print;
+    })(Element);
+    App_1.Print = Print;
+})(App || (App = {}));
+for (var guiClass in App) {
+    if (App.hasOwnProperty(guiClass)) {
+        if (typeof App[guiClass].prototype !== "undefined" && typeof App[guiClass].prototype.register !== "undefined" && typeof App[guiClass].registered !== "undefined" && !App[guiClass].registered) {
+            App[guiClass].prototype.register();
         }
     }
 }
-Gui.initialize();
+App.initialize();
+//
+//# sourceMappingURL=tectonic.js.map

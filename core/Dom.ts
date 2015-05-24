@@ -1,18 +1,17 @@
 export class Dom {
 	public static initialize() {
 		var doc = document.querySelectorAll('*');
-		console.log(doc);
 
 		for (var i = 0; i < doc.length; i++) {
-			Gui.Dom.textNodeSearch(doc[i]);
+			App.Dom.textNodeSearch(doc[i]);
 			for (var n = 0; n < doc[i].attributes.length; n++) {
-				Gui.Dom.templateRenderForAttribute(doc[i], doc[i].attributes[n].name);
+				App.Dom.templateRenderForAttribute(doc[i], doc[i].attributes[n].name);
 			}
 		}
 
 		var observer = new MutationSummary({
 			callback: function(summaries) {
-				Gui.Dom.templateFinder(summaries);
+				App.Dom.templateFinder(summaries);
 			},
 			queries: [{
 				all: true
@@ -20,28 +19,28 @@ export class Dom {
 		});
 
 		document.querySelector('body').addEventListener('input', function(event) {
-			Gui.Dom.twoWayBinderOutHandler(event, 'input[data-bind-to]:not([data-bind-on]), input[data-bind-to][data-bind-on=input]')
+			App.Dom.twoWayBinderOutHandler(event, 'input[data-bind-to]:not([data-bind-on]), input[data-bind-to][data-bind-on=input]')
 		});
 
 		document.querySelector('body').addEventListener('change', function(event) {
-			Gui.Dom.twoWayBinderOutHandler(event, '[data-bind-to][data-bind-on=change]')
+			App.Dom.twoWayBinderOutHandler(event, '[data-bind-to][data-bind-on=change]')
 		});
 	}
 
 	public static templateFinder(summaries) {
 		summaries[0].added.forEach(function(el: HTMLElement) {
-			Gui.Dom.textNodeSearch(el);
+			App.Dom.textNodeSearch(el);
 		});
 
 		summaries[0].characterDataChanged.forEach(function(el: HTMLElement) {
-			Gui.Dom.textNodeSearch(el);
+			App.Dom.textNodeSearch(el);
 		});
 
 		for(var key in summaries[0].attributeChanged) {
 			var attributes = summaries[0].attributeChanged;
 			if (attributes.hasOwnProperty(key)) {
 				attributes[key].forEach(function(el) {
-					Gui.Dom.templateRenderForAttribute(el, key);
+					App.Dom.templateRenderForAttribute(el, key);
 				})
 			}
 		}
@@ -49,48 +48,52 @@ export class Dom {
 
 	public static textNodeSearch(el) {
 		if(el.nodeType === 3) {
-			Gui.Dom.templateRenderForTextNode(el, 'nodeValue');
+			App.Dom.templateRenderForTextNode(el, 'nodeValue');
 		} else {
 			for (var i = 0; i < el.childNodes.length; i++) {
 				if (el.childNodes[i].nodeType === 3) {
-					Gui.Dom.templateRenderForTextNode(el.childNodes[i], 'nodeValue');
+					App.Dom.templateRenderForTextNode(el.childNodes[i], 'nodeValue');
 				}
 			}
 		}
 	}
 
-	public static templateRenderForTextNode(el, templateProperty: string) {
-		var regex = new RegExp(Gui.regexForTemplate, 'g');
-		var matches = el[templateProperty].match(regex);
+	public static templateRenderForTextNode(el: Node, templateProperty: string) {
+		var regexForTemplate: RegExp = new RegExp(App.regexForTemplate, 'g');
+		var regexForModelPaths: RegExp = new RegExp(App.regexForModelPaths, 'g');
+		var matches: Object = el[templateProperty].match(regexForTemplate);
 		if(matches) {
-			el.__template = el[templateProperty];
-			el.nodeValue = el[templateProperty].replace(regex, function(match, submatch) {
-				var modelPath = submatch.match(/Gui\.(.*?)(?!\[.*?|.*?\])(\||$|\n)/)[1].trim();
-				if (typeof Gui.elementToModelMap[modelPath] === 'undefined') {
-					Gui.elementToModelMap[modelPath] = [];
-				}
-				if ((function(){ // If node isn't already in this model path
-						var notAlreadyInModel = true;
-						Gui.elementToModelMap[modelPath].forEach(function(node) {
-							if(el === node) {
-								notAlreadyInModel = false;
-							}
-						});
-						return notAlreadyInModel;
-					}())) {
+			el['__template'] = el[templateProperty];
+			el.nodeValue = el[templateProperty].replace(regexForTemplate, function(match, submatch) {
+				var modelPaths: Array<string>;
+				while ((modelPaths = regexForModelPaths.exec(submatch)) !== null) {
+					var modelPath = modelPaths[3].trim();
+					if (typeof App.elementToModelMap.get(modelPath) === 'undefined') {
+						App.elementToModelMap.set(modelPath, []);
+					}
+					if ((function () { // If node isn't already in this model path
+							var notAlreadyInModel:boolean = true;
+							App.elementToModelMap.get(modelPath).forEach(function (node:Node) {
+								if (el === node) {
+									notAlreadyInModel = false;
+								}
+							});
+							return notAlreadyInModel;
+						}())) {
 
-					Gui.elementToModelMap[modelPath].push(el);
+						App.elementToModelMap.get(modelPath).push(el);
+					}
 				}
-
-				return Gui.Utils.processTemplateThroughPipes(submatch);
+				return App.Utils.processTemplateThroughPipes(submatch);
 			});
 		}
 	}
 
-	public static templateRenderForAttribute(el, attribute: string, useAttributeTemplate?: boolean) {
+	public static templateRenderForAttribute(el: HTMLElement, attribute: string, useAttributeTemplate?: boolean) {
 		useAttributeTemplate = useAttributeTemplate || false;
-		var regex = new RegExp(Gui.regexForTemplate, 'g');
-		var attributeValue;
+		var regexForTemplate: RegExp = new RegExp(App.regexForTemplate, 'g');
+		var regexForModelPaths: RegExp = new RegExp(App.regexForModelPaths, 'g');
+		var attributeValue: string;
 
 		if (useAttributeTemplate) {
 			attributeValue = el['__' + attribute + 'Template'];
@@ -98,31 +101,35 @@ export class Dom {
 			attributeValue = el.getAttribute(attribute);
 		}
 
-		var matches = attributeValue.match(regex);
+		var matches: Object = attributeValue.match(regexForTemplate);
 		if(matches) {
 			el['__' + attribute + 'Template'] = attributeValue;
-			el.setAttribute(attribute, attributeValue.replace(regex, function(match, submatch) {
-				var modelPath = submatch.match(/Gui\.(.*?)(?!\[.*?|.*?\])(\||$|\n)/)[1].trim();
-				if (typeof Gui.elementToModelMap[modelPath] === 'undefined') {
-					Gui.elementToModelMap[modelPath] = [];
-				}
-				if ((function(){ // If node isn't already in this model path
-						var notAlreadyInModel = true;
-						Gui.elementToModelMap[modelPath].forEach(function(item) {
-							if(typeof item.nodeValue === 'undefined' && el === item.element && attribute === item.attribute) {
-								notAlreadyInModel = false;
-							}
-						});
-						return notAlreadyInModel;
-					}())) {
+			el.setAttribute(attribute, attributeValue.replace(regexForTemplate, function(match, submatch) {
+				var modelPaths: Array<string>;
+				while ((modelPaths = regexForModelPaths.exec(submatch)) !== null) {
+					var modelPath = modelPaths[3].trim();
+					if (typeof App.elementToModelMap.get(modelPath) === 'undefined') {
+						App.elementToModelMap.set(modelPath, []);
+					}
+					if ((function () { // If node isn't already in this model path
+							var notAlreadyInModel:boolean = true;
+							App.elementToModelMap.get(modelPath).forEach(function (item) {
+								if (typeof item.nodeValue === 'undefined' && el === item.element && attribute === item.attribute) {
+									notAlreadyInModel = false;
+								}
+							});
+							return notAlreadyInModel;
+						}())) {
 
-					Gui.elementToModelMap[modelPath].push({
-						element: el,
-						attribute: attribute
-					});
-				}
+						let SubscribedAttrTemplate:SubscribedAttrTemplate = {
+							element  : el,
+							attribute: attribute
+						};
 
-				return Gui.Utils.processTemplateThroughPipes(submatch);
+						App.elementToModelMap.get(modelPath).push(SubscribedAttrTemplate);
+					}
+				}
+				return App.Utils.processTemplateThroughPipes(submatch);
 			}));
 		}
 	}

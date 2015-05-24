@@ -1,28 +1,47 @@
+/// <reference path="lib.es6.d.ts"/>
+
 declare var MutationSummary;
 
 interface InternalModelWrapper {
 	model: Object;
 }
 
-class Gui {
-	private static regexForTemplate: string = '\\$\\{(.*?)\\}';
+interface SubscribedElement {
+	element: HTMLElement;
+	attributes: [{
+		attribute: string;
+		expression: string;
+		callbacks: Array<Function>;
+	}]
+}
+
+interface SubscribedAttrTemplate {
+	element: Node;
+	attribute: string;
+}
+
+class App {
 	private static internalModelWrapper: InternalModelWrapper = {model: {}};
-	public static elementToModelMap: Object = {};
-	public static set model(value) {
-		Gui.internalModelWrapper.model = value;
-		Gui.Utils.Observe.observeObjects(false, Gui.internalModelWrapper);
+	public static regexForTemplate: string = '\\$\\{(.*?)\\}';
+	public static regexForModelPaths: string = '((App|this)\\.(.*?)(?!\\[.*?|.*?\\])(?:\\||$|\\n|\\*|\\+|\\\\|\\-|\\s|\\(|\\)|\\|\\||&&|\\?|\\:|\\!))';
+	public static elementToModelMap: Map<string, Array<SubscribedAttrTemplate|Node>> = new Map([['', []]]);
+	public static subscribedElementsToModelMap: Map<string, Array<SubscribedElement>> = new Map([['', []]]);
+	public static set model(value: Object) {
+		App.internalModelWrapper.model = value;
+		App.Utils.Observe.observeObjects(false, App.internalModelWrapper);
 	}
-	public static get model() {
-		return Gui.internalModelWrapper.model;
+	public static get model(): Object {
+		return App.internalModelWrapper.model;
 	}
 
 	public static initialize() {
-		Gui.Utils.Observe.observeObjects(false, Gui.internalModelWrapper);
-		Gui.Dom.initialize();
+		App.Utils.Observe.observeObjects(false, App.internalModelWrapper);
+		App.Dom.initialize();
 	}
 }
-
-module Gui {
+////////////////////////////////
+module App {
+////////////////////////////////
 export class Utils {
 	public static isElement(o: any): boolean{
 		return (typeof HTMLElement === "object" ? o instanceof HTMLElement : //DOM2
@@ -31,6 +50,7 @@ export class Utils {
 
 	public static processTemplateThroughPipes(value) {
 		var value = value.split(/(?!\[.*?|.*?\])\|/g);
+		console.log(value);
 		var returnVal = eval(value[0].trim());
 		if(typeof returnVal !== 'undefined') {
 			returnVal = String(returnVal).trim();
@@ -39,19 +59,24 @@ export class Utils {
 			} else {
 				for (var i = 1; i < value.length; i++) {
 					var func = value[i].trim();
-					var args = Gui.Utils.splitParametersBySpaces(func);
+					var args = App.Utils.splitParametersBySpaces(func);
 					for (var n = 1; n < args.length; n++) {
-						args[n] = Gui.Utils.unwrapQuotes(Gui.Utils.castStringToType(args[n]));
+						args[n] = App.Utils.unwrapQuotes(App.Utils.castStringToType(args[n]));
 					}
 					func = args.shift();
-					if (typeof Gui.Pipes[func] !== 'undefined') {
+					if (typeof App.Pipes[func] !== 'undefined') {
 						args.unshift(returnVal);
-						returnVal = Gui.Pipes[func](returnVal, args);
+						returnVal = App.Pipes[func](returnVal, args);
 					} else if (typeof String(returnVal)[func] !== 'undefined') {
 						returnVal = window['String']['prototype'][func].apply(returnVal, args);
 					}
 				}
-				return returnVal;
+				// If the value is not defined or otherwise a value we don't want to display
+				if (typeof returnVal === 'undefined' || String(returnVal).toLowerCase() === 'nan' || String(returnVal).toLowerCase() === 'undefined') {
+					return ""; // Return an empty stirng
+				} else { // If the value is good to display
+					return returnVal; // Return the value
+				}
 			}
 		} else {
 			return '';
@@ -90,7 +115,6 @@ export class Utils {
 			lastChar = currChar;
 		}
 		arr.push(string.substr(lastSpace + 1, (string.length - 1) - lastSpace).trim());
-		console.log(arr);
 		return arr;
 	}
 
@@ -125,9 +149,9 @@ export module Utils {
 		public static observeObjects (unobserve: boolean, objectToObserve: Object|Array<any>, objectLocationString?: string, previousObjects?: Array<Object>): void {
 			//LOOP THROUGH ALL SUPPLIED MODELS AND RECURSIVELY OBSERVE OBJECTS WITHIN OBJECTS
 			var observationAction: string = unobserve ? 'unobserve' : 'observe';//Variable used to decide which function is called depending on whether we're observing or unobserving.
-			var witnessedObjects: Object = Gui.Utils.Observe.witnessedObjects;
-			var observerFunctions: Object = Gui.Utils.Observe.observerFunctions;
-			var observeObjects: Function = Gui.Utils.Observe.observeObjects;
+			var witnessedObjects: Object = App.Utils.Observe.witnessedObjects;
+			var observerFunctions: Object = App.Utils.Observe.observerFunctions;
+			var observeObjects: Function = App.Utils.Observe.observeObjects;
 			previousObjects = previousObjects || [];//array of previously observed objects. We keep this to prevent redundant observation in circular structures
 
 			for (var key in objectToObserve) {
@@ -135,7 +159,7 @@ export module Utils {
 					var value = objectToObserve[key];
 					if ((value !== null && //check if value is not null
 					(typeof value === 'object' || Array.isArray(value))) && //and it is an object or an array
-					!Gui.Utils.isElement(value) && //and also not a DOM element
+					!App.Utils.isElement(value) && //and also not a DOM element
 					(function () { //finally check that this object is not reference to a previously observed object
 						var wasNotSeen = true;
 						previousObjects.forEach(function (object) {
@@ -174,15 +198,15 @@ export module Utils {
 									observeObjects(unobserve, value, thisLocation, previousObjects);//Observe this object or array and all of its obserable children.
 								}
 
-								//setElementsToValue($element, newValue);
-								Gui.Utils.Observe.setElementsToValue(Gui.elementToModelMap, modelPath, newValue);
+								App.Utils.Observe.setElementsToValue(App.elementToModelMap, modelPath, newValue);
+								App.Utils.Observe.updateSubscribedElements(App.subscribedElementsToModelMap, modelPath);
 
 								if (Array.isArray(newValue))//If the new value is an array
 									var logValue = JSON.stringify(newValue);//set the logging value as a stringified array
 								else//Otherwise...
 									logValue = "'" + newValue + "'";//display as a quoted string.
 
-								console.log(thisLocation + key + " is now equal to " + logValue + " as observed in the model.");
+								//console.log(thisLocation + key + " is now equal to " + logValue + " as observed in the model.");
 
 								/*if (typeof options.modelChangeCallback === "function") {//If there is a callback function specified by the user
 									console.log("Model change callback executed for change in " + thisLocation + key);//show log information
@@ -212,35 +236,49 @@ export module Utils {
 		}
 
 		public static setElementsToValue(elementsObject, modelLocation, value) {
-			var boundElements = document.querySelectorAll('input[data-bind-to="Gui.' + modelLocation + '"]:not([data-bind-on]), input[data-bind-to="Gui.' + modelLocation + '"][data-bind-on=input]');
+			var boundElements = document.querySelectorAll('input[data-bind-to="App.' + modelLocation + '"]:not([data-bind-on]), input[data-bind-to="App.' + modelLocation + '"][data-bind-on=input]');
 			for (var i = 0; i < boundElements.length; i++) {
-				Gui.Dom.twoWayBinderInHandler(boundElements[i], value);
+				App.Dom.twoWayBinderInHandler(boundElements[i], value);
 			}
-			elementsObject[modelLocation].forEach(function(node) {
-				if(node instanceof Node || node instanceof HTMLElement) {
-					Gui.Dom.templateRenderForTextNode(node, '__template');
-				} else {
-					Gui.Dom.templateRenderForAttribute(node.element, node.attribute, true);
-				}
-			});
+			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
+				elementsObject.get(modelLocation).forEach(function (node) {
+					if (node instanceof Node || node instanceof HTMLElement) {
+						App.Dom.templateRenderForTextNode(node, '__template');
+					} else {
+						App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
+					}
+				});
+			}
+		}
+
+		public static updateSubscribedElements(elementsObject, modelLocation) {
+			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
+				elementsObject.get(modelLocation).forEach(function(item: SubscribedElement) {
+					item.attributes.forEach(function(attribute) {
+						attribute.callbacks.forEach(function(callback) {
+							callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+						});
+					});
+				});
+			}
 		}
 	}
 }
+////////////////////////////////
 export class Dom {
 	public static initialize() {
 		var doc = document.querySelectorAll('*');
-		console.log(doc);
 
 		for (var i = 0; i < doc.length; i++) {
-			Gui.Dom.textNodeSearch(doc[i]);
+			App.Dom.textNodeSearch(doc[i]);
 			for (var n = 0; n < doc[i].attributes.length; n++) {
-				Gui.Dom.templateRenderForAttribute(doc[i], doc[i].attributes[n].name);
+				App.Dom.templateRenderForAttribute(doc[i], doc[i].attributes[n].name);
 			}
 		}
 
 		var observer = new MutationSummary({
 			callback: function(summaries) {
-				Gui.Dom.templateFinder(summaries);
+				App.Dom.templateFinder(summaries);
 			},
 			queries: [{
 				all: true
@@ -248,28 +286,28 @@ export class Dom {
 		});
 
 		document.querySelector('body').addEventListener('input', function(event) {
-			Gui.Dom.twoWayBinderOutHandler(event, 'input[data-bind-to]:not([data-bind-on]), input[data-bind-to][data-bind-on=input]')
+			App.Dom.twoWayBinderOutHandler(event, 'input[data-bind-to]:not([data-bind-on]), input[data-bind-to][data-bind-on=input]')
 		});
 
 		document.querySelector('body').addEventListener('change', function(event) {
-			Gui.Dom.twoWayBinderOutHandler(event, '[data-bind-to][data-bind-on=change]')
+			App.Dom.twoWayBinderOutHandler(event, '[data-bind-to][data-bind-on=change]')
 		});
 	}
 
 	public static templateFinder(summaries) {
 		summaries[0].added.forEach(function(el: HTMLElement) {
-			Gui.Dom.textNodeSearch(el);
+			App.Dom.textNodeSearch(el);
 		});
 
 		summaries[0].characterDataChanged.forEach(function(el: HTMLElement) {
-			Gui.Dom.textNodeSearch(el);
+			App.Dom.textNodeSearch(el);
 		});
 
 		for(var key in summaries[0].attributeChanged) {
 			var attributes = summaries[0].attributeChanged;
 			if (attributes.hasOwnProperty(key)) {
 				attributes[key].forEach(function(el) {
-					Gui.Dom.templateRenderForAttribute(el, key);
+					App.Dom.templateRenderForAttribute(el, key);
 				})
 			}
 		}
@@ -277,48 +315,52 @@ export class Dom {
 
 	public static textNodeSearch(el) {
 		if(el.nodeType === 3) {
-			Gui.Dom.templateRenderForTextNode(el, 'nodeValue');
+			App.Dom.templateRenderForTextNode(el, 'nodeValue');
 		} else {
 			for (var i = 0; i < el.childNodes.length; i++) {
 				if (el.childNodes[i].nodeType === 3) {
-					Gui.Dom.templateRenderForTextNode(el.childNodes[i], 'nodeValue');
+					App.Dom.templateRenderForTextNode(el.childNodes[i], 'nodeValue');
 				}
 			}
 		}
 	}
 
-	public static templateRenderForTextNode(el, templateProperty: string) {
-		var regex = new RegExp(Gui.regexForTemplate, 'g');
-		var matches = el[templateProperty].match(regex);
+	public static templateRenderForTextNode(el: Node, templateProperty: string) {
+		var regexForTemplate: RegExp = new RegExp(App.regexForTemplate, 'g');
+		var regexForModelPaths: RegExp = new RegExp(App.regexForModelPaths, 'g');
+		var matches: Object = el[templateProperty].match(regexForTemplate);
 		if(matches) {
-			el.__template = el[templateProperty];
-			el.nodeValue = el[templateProperty].replace(regex, function(match, submatch) {
-				var modelPath = submatch.match(/Gui\.(.*?)(?!\[.*?|.*?\])(\||$|\n)/)[1].trim();
-				if (typeof Gui.elementToModelMap[modelPath] === 'undefined') {
-					Gui.elementToModelMap[modelPath] = [];
-				}
-				if ((function(){ // If node isn't already in this model path
-						var notAlreadyInModel = true;
-						Gui.elementToModelMap[modelPath].forEach(function(node) {
-							if(el === node) {
-								notAlreadyInModel = false;
-							}
-						});
-						return notAlreadyInModel;
-					}())) {
+			el['__template'] = el[templateProperty];
+			el.nodeValue = el[templateProperty].replace(regexForTemplate, function(match, submatch) {
+				var modelPaths: Array<string>;
+				while ((modelPaths = regexForModelPaths.exec(submatch)) !== null) {
+					var modelPath = modelPaths[3].trim();
+					if (typeof App.elementToModelMap.get(modelPath) === 'undefined') {
+						App.elementToModelMap.set(modelPath, []);
+					}
+					if ((function () { // If node isn't already in this model path
+							var notAlreadyInModel:boolean = true;
+							App.elementToModelMap.get(modelPath).forEach(function (node:Node) {
+								if (el === node) {
+									notAlreadyInModel = false;
+								}
+							});
+							return notAlreadyInModel;
+						}())) {
 
-					Gui.elementToModelMap[modelPath].push(el);
+						App.elementToModelMap.get(modelPath).push(el);
+					}
 				}
-
-				return Gui.Utils.processTemplateThroughPipes(submatch);
+				return App.Utils.processTemplateThroughPipes(submatch);
 			});
 		}
 	}
 
-	public static templateRenderForAttribute(el, attribute: string, useAttributeTemplate?: boolean) {
+	public static templateRenderForAttribute(el: HTMLElement, attribute: string, useAttributeTemplate?: boolean) {
 		useAttributeTemplate = useAttributeTemplate || false;
-		var regex = new RegExp(Gui.regexForTemplate, 'g');
-		var attributeValue;
+		var regexForTemplate: RegExp = new RegExp(App.regexForTemplate, 'g');
+		var regexForModelPaths: RegExp = new RegExp(App.regexForModelPaths, 'g');
+		var attributeValue: string;
 
 		if (useAttributeTemplate) {
 			attributeValue = el['__' + attribute + 'Template'];
@@ -326,31 +368,35 @@ export class Dom {
 			attributeValue = el.getAttribute(attribute);
 		}
 
-		var matches = attributeValue.match(regex);
+		var matches: Object = attributeValue.match(regexForTemplate);
 		if(matches) {
 			el['__' + attribute + 'Template'] = attributeValue;
-			el.setAttribute(attribute, attributeValue.replace(regex, function(match, submatch) {
-				var modelPath = submatch.match(/Gui\.(.*?)(?!\[.*?|.*?\])(\||$|\n)/)[1].trim();
-				if (typeof Gui.elementToModelMap[modelPath] === 'undefined') {
-					Gui.elementToModelMap[modelPath] = [];
-				}
-				if ((function(){ // If node isn't already in this model path
-						var notAlreadyInModel = true;
-						Gui.elementToModelMap[modelPath].forEach(function(item) {
-							if(typeof item.nodeValue === 'undefined' && el === item.element && attribute === item.attribute) {
-								notAlreadyInModel = false;
-							}
-						});
-						return notAlreadyInModel;
-					}())) {
+			el.setAttribute(attribute, attributeValue.replace(regexForTemplate, function(match, submatch) {
+				var modelPaths: Array<string>;
+				while ((modelPaths = regexForModelPaths.exec(submatch)) !== null) {
+					var modelPath = modelPaths[3].trim();
+					if (typeof App.elementToModelMap.get(modelPath) === 'undefined') {
+						App.elementToModelMap.set(modelPath, []);
+					}
+					if ((function () { // If node isn't already in this model path
+							var notAlreadyInModel:boolean = true;
+							App.elementToModelMap.get(modelPath).forEach(function (item) {
+								if (typeof item.nodeValue === 'undefined' && el === item.element && attribute === item.attribute) {
+									notAlreadyInModel = false;
+								}
+							});
+							return notAlreadyInModel;
+						}())) {
 
-					Gui.elementToModelMap[modelPath].push({
-						element: el,
-						attribute: attribute
-					});
-				}
+						let SubscribedAttrTemplate:SubscribedAttrTemplate = {
+							element  : el,
+							attribute: attribute
+						};
 
-				return Gui.Utils.processTemplateThroughPipes(submatch);
+						App.elementToModelMap.get(modelPath).push(SubscribedAttrTemplate);
+					}
+				}
+				return App.Utils.processTemplateThroughPipes(submatch);
 			}));
 		}
 	}
@@ -373,68 +419,146 @@ export class Dom {
 		el.value = value;
 	}
 }
+////////////////////////////////
 export class Pipes {
 	public static toUpperCase(string: string) {
 		return string.toUpperCase();
 	}
 }
+////////////////////////////////
+declare var App;
 
-declare var Gui;
+export interface SubscribedAttribute {
+	attribute: string;
+	subscribedModelPaths: Array<string>;
+}
 
 export class Element {
 
 	public static registered: boolean = false;
 	public static el: HTMLElement;
 	public el: HTMLElement;
+	public subscribedAttrs: Array<SubscribedAttribute> = [];
 
 	constructor(el?) {
-		if(!Gui[this.getClassName()].registered) {
+		if(!App[this.getClassName()].registered) {
 			this.register();
 		}
 		if (!el) {
-			this.el = new Gui[this.getClassName()].el;
+			this.el = new App[this.getClassName()].el;
 		} else {
 			this.el = el;
 		}
 		this.el['__controller'] = this;
-		this.el.setAttribute('uuid', 'test');
 	}
 
-	protected getClassName() {
-		//var funcNameRegex = /function (.{1,})\(/; // This is for ES5 and ES3 Builds
-		var funcNameRegex = /class (.*?)\s*?\{/; //This is for ES6 Builds
+	protected subscribeAttrToModelPath(attribute: string, callback: Function) {
+		var index = 0;
+		var el = this.el;
+		var regexForModelPaths = new RegExp(App.regexForModelPaths, 'g');
+		var expression = el.getAttribute(attribute);
+		var subscribedAttribute:SubscribedAttribute = {
+			attribute           : attribute,
+			subscribedModelPaths: []
+		};
+		var modelPaths: Array<string>;
+		while ((modelPaths = regexForModelPaths.exec(expression)) !== null) {
+			var modelPath = modelPaths[3].trim();
+			subscribedAttribute.subscribedModelPaths.push(modelPath);
+			if (typeof App.subscribedElementsToModelMap.get(modelPath) === 'undefined') {
+				App.subscribedElementsToModelMap.set(modelPath, []);
+			}
+
+			// If this element is not in the subscribed map.
+			if (!App.subscribedElementsToModelMap.get(modelPath).some(function (value:SubscribedElement) {
+				if (value.element === el) {
+					// If we find the element, check to see if it has this attribute already
+					if (!value.attributes.some(function (attr) {
+							// If this attribute exists already
+							if (attr.attribute === attribute) {
+								attr.callbacks.push(callback); // Then push the additional callback
+								return true
+							}
+						})) {
+						// If this attribute does not exist for the current element, add it
+						value.attributes.push({
+							attribute : attribute,
+							expression: expression,
+							callbacks : [callback]
+						});
+					}
+					return true;
+				}
+			})) {
+				// If this element is not in the subscribed map...
+				var subscribedElement:SubscribedElement = {
+					element   : el,
+					attributes: [{
+						attribute : attribute,
+						expression: expression,
+						callbacks : [callback]
+					}]
+				};
+				// Push it
+				App.subscribedElementsToModelMap.get(modelPath).push(subscribedElement);
+			}
+		}
+		// And push it to this element's list of subscribed attributes
+		this.subscribedAttrs.push(subscribedAttribute);
+		// Set initial value
+		App.Utils.Observe.updateSubscribedElements(App.subscribedElementsToModelMap, modelPath);
+	}
+
+	/*protected updateSubscribedAttr(attribute: string) {
+		var el = this.el;
+		this.subscribedAttrs.some(function(subscribedAttribute: SubscribedAttribute) {
+			if (subscribedAttribute.attribute === attribute) {
+				App.subscribedElementsToModelMap.get(subscribedAttribute.subscribedModelPath).some(function(subscribedElement: SubscribedElement) {
+					if(subscribedElement.element === el) {
+						// TODO: finish this function.
+						return true;
+					}
+				});
+				return true;
+			}
+		});
+	}*/
+
+	protected getClassName(): string {
+		var funcNameRegex = /function (.{1,})\(/; // This is for ES5 and ES3 Builds
+		//var funcNameRegex = /class (.*?)\s*?\{/; //This is for ES6 Builds
 		var results = (funcNameRegex).exec(this["constructor"].toString());
 		return (results && results.length > 1) ? results[1] : "";
 	}
 
 	protected register(): void {
-		if (!Gui[this.getClassName()].registered) {
+		if (!App[this.getClassName()].registered) {
 
-			Gui[this.getClassName()].registered = true;
+			App[this.getClassName()].registered = true;
 
 			var guiElement = this;
 			var document:any = window.document;
 
-			Gui[this.getClassName()].el = document.registerElement('gui-' + this.getClassName().toLowerCase(), {
+			App[this.getClassName()].el = document.registerElement('app-' + this.getClassName().toLowerCase(), {
 				prototype: Object.create(HTMLElement.prototype, {
 					createdCallback: {
 						value: function() {
 							if (typeof this['__controller'] === 'undefined' || !this['__controller']) {
-								this['__controller'] = new Gui[guiElement.getClassName()](this);
+								this['__controller'] = new App[guiElement.getClassName()](this);
 							}
 
 							var shadow = this.createShadowRoot();
 
 							var observer = new MutationSummary({
 								callback: function (summaries) {
-									Gui.Dom.templateFinder(summaries);
+									App.Dom.templateFinder(summaries);
 								},
 								queries : [{
 									all: true
 								}],
 								rootNode: shadow
 							});
-							shadow.innerHTML = "<content></content><b>I'm in the element's ${Gui.model.test} Shadow DOM!</b>";
+							shadow.innerHTML = "<content></content>";
 						}
 					},
 					attributeChangedCallback: function() {
@@ -446,20 +570,26 @@ export class Element {
 	}
 
 }
-
-declare var Gui;
+////////////////////////////////
+declare var App;
 export class Print extends Element{
 	constructor(e?) {
 		super(e);
-		console.log('hi!');
+		var element = this.el;
+		this.subscribeAttrToModelPath('value', function(value){
+			element.innerHTML = value;
+		});
 	}
 }
+////////////////////////////////
 }
-for (var guiClass in Gui) {
-	if (Gui.hasOwnProperty(guiClass)) {
-		if (typeof Gui[guiClass].prototype !== "undefined" && typeof Gui[guiClass].prototype.register !== "undefined" && typeof Gui[guiClass].registered !== "undefined" && !Gui[guiClass].registered) {
-			Gui[guiClass].prototype.register();
+
+for (var guiClass in App) {
+	if (App.hasOwnProperty(guiClass)) {
+		if (typeof App[guiClass].prototype !== "undefined" && typeof App[guiClass].prototype.register !== "undefined" && typeof App[guiClass].registered !== "undefined" && !App[guiClass].registered) {
+			App[guiClass].prototype.register();
 		}
 	}
 }
-Gui.initialize();
+App.initialize();
+//# sourceMappingURL=tectonic.ts.map
