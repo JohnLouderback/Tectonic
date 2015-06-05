@@ -27,7 +27,11 @@ class App {
 	public static elementToModelMap: Map<string, Array<SubscribedAttrTemplate|Node>> = new Map([['', []]]);
 	public static subscribedElementsToModelMap: Map<string, Array<SubscribedElement>> = new Map([['', []]]);
 	public static set model(value: Object) {
-		App.internalModelWrapper.model = value;
+		for (var key in value) {
+			if (value.hasOwnProperty(key)) {
+				App.internalModelWrapper.model[key] = value[key]
+			}
+		}
 		App.Utils.Observe.observeObjects(false, App.internalModelWrapper);
 	}
 	public static get model(): Object {
@@ -50,7 +54,6 @@ export class Utils {
 
 	public static processTemplateThroughPipes(value) {
 		var value = value.split(/(?!\[.*?|.*?\])\|/g);
-		console.log(value);
 		var returnVal = eval(value[0].trim());
 		if(typeof returnVal !== 'undefined') {
 			returnVal = String(returnVal).trim();
@@ -240,27 +243,63 @@ export module Utils {
 			for (var i = 0; i < boundElements.length; i++) {
 				App.Dom.twoWayBinderInHandler(boundElements[i], value);
 			}
-			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
-				elementsObject.get(modelLocation).forEach(function (node) {
-					if (node instanceof Node || node instanceof HTMLElement) {
-						App.Dom.templateRenderForTextNode(node, '__template');
-					} else {
-						App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
-					}
-				});
-			}
+
+			elementsObject.forEach(function(value: Array<any>, key: string) {
+				if (key.startsWith(modelLocation)) {
+					value.forEach(function (node) {
+						if (node instanceof Node || node instanceof HTMLElement) {
+							App.Dom.templateRenderForTextNode(node, '__template');
+						} else {
+							App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
+						}
+					});
+				}
+			});
 		}
 
 		public static updateSubscribedElements(elementsObject, modelLocation) {
-			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
-				elementsObject.get(modelLocation).forEach(function(item: SubscribedElement) {
-					item.attributes.forEach(function(attribute) {
-						attribute.callbacks.forEach(function(callback) {
-							callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+			elementsObject.forEach(function(value: Array<SubscribedElement>, key: string) {
+				if (key.startsWith(modelLocation)) {
+					value.forEach(function (item:SubscribedElement) {
+						item.attributes.forEach(function (attribute) {
+							attribute.callbacks.forEach(function (callback) {
+								callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+							});
 						});
 					});
+				}
+			});
+		}
+	}
+
+	export class Sandbox {
+		public static evaluate(code) {
+			var workerStr = `
+			onmessage = function (oEvent) {
+				postMessage({
+					"id": oEvent.data.id,
+					"evaluated": eval(oEvent.data.code)
 				});
 			}
+			`;
+			var blob = new Blob([workerStr], {type: 'application/javascript'});
+			var aListeners = [], oParser = new Worker(URL.createObjectURL(blob));
+
+			oParser.onmessage = function (oEvent) {
+				debugger;
+				if (aListeners[oEvent.data.id]) { aListeners[oEvent.data.id](oEvent.data.evaluated); }
+				delete aListeners[oEvent.data.id];
+			};
+
+
+			return (function (code, fListener) {
+				aListeners.push(fListener || null);
+				oParser.postMessage({
+					"id": aListeners.length - 1,
+					"code": code
+				});
+			})(code, function(data){ console.log(data); });
+
 		}
 	}
 }
@@ -388,7 +427,7 @@ export class Dom {
 							return notAlreadyInModel;
 						}())) {
 
-						let SubscribedAttrTemplate:SubscribedAttrTemplate = {
+						var SubscribedAttrTemplate:SubscribedAttrTemplate = {
 							element  : el,
 							attribute: attribute
 						};
@@ -582,6 +621,45 @@ export class Print extends Element{
 	}
 }
 ////////////////////////////////
+declare var App;
+export class If extends Element{
+	constructor(e?) {
+		super(e);
+		var element = this.el;
+		this.subscribeAttrToModelPath('condition', function(value){
+			var val = App.Utils.castStringToType(value);
+			if (val) {
+				element.setAttribute('evaluates-to', 'true');
+				element.style.display = 'block';
+			} else {
+				element.setAttribute('evaluates-to', 'false');
+				element.style.display = 'none';
+			}
+			var nextSibling = element.nextElementSibling;
+			var nextTagName = nextSibling.tagName;
+			if(typeof nextSibling !== 'undefined' && typeof nextTagName !== 'undefined' && nextTagName.toLowerCase() === 'app-else' && typeof nextSibling['__controller'] !== 'undefined') {
+				nextSibling['__controller'].update(App.Utils.castStringToType(element.getAttribute('evaluates-to')));
+			}
+		});
+	}
+}
+////////////////////////////////
+declare var App;
+export class Else extends Element {
+	constructor(e?) {
+		super(e);
+	}
+
+	public update(ifVal: boolean) {
+		var element = this.el;
+		if (!ifVal) {
+			element.style.display = 'block'
+		} else {
+			element.style.display = 'none'
+		}
+	}
+}
+////////////////////////////////
 }
 
 for (var guiClass in App) {
@@ -592,4 +670,6 @@ for (var guiClass in App) {
 	}
 }
 App.initialize();
+
+window['App'] = App;
 //# sourceMappingURL=tectonic.ts.map

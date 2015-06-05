@@ -6,7 +6,6 @@ export class Utils {
 
 	public static processTemplateThroughPipes(value) {
 		var value = value.split(/(?!\[.*?|.*?\])\|/g);
-		console.log(value);
 		var returnVal = eval(value[0].trim());
 		if(typeof returnVal !== 'undefined') {
 			returnVal = String(returnVal).trim();
@@ -196,27 +195,63 @@ export module Utils {
 			for (var i = 0; i < boundElements.length; i++) {
 				App.Dom.twoWayBinderInHandler(boundElements[i], value);
 			}
-			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
-				elementsObject.get(modelLocation).forEach(function (node) {
-					if (node instanceof Node || node instanceof HTMLElement) {
-						App.Dom.templateRenderForTextNode(node, '__template');
-					} else {
-						App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
-					}
-				});
-			}
+
+			elementsObject.forEach(function(value: Array<any>, key: string) {
+				if (key.startsWith(modelLocation)) {
+					value.forEach(function (node) {
+						if (node instanceof Node || node instanceof HTMLElement) {
+							App.Dom.templateRenderForTextNode(node, '__template');
+						} else {
+							App.Dom.templateRenderForAttribute(node.element, node.attribute, true);
+						}
+					});
+				}
+			});
 		}
 
 		public static updateSubscribedElements(elementsObject, modelLocation) {
-			if (typeof elementsObject.get(modelLocation) !== 'undefined') {
-				elementsObject.get(modelLocation).forEach(function(item: SubscribedElement) {
-					item.attributes.forEach(function(attribute) {
-						attribute.callbacks.forEach(function(callback) {
-							callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+			elementsObject.forEach(function(value: Array<SubscribedElement>, key: string) {
+				if (key.startsWith(modelLocation)) {
+					value.forEach(function (item:SubscribedElement) {
+						item.attributes.forEach(function (attribute) {
+							attribute.callbacks.forEach(function (callback) {
+								callback(App.Utils.processTemplateThroughPipes(attribute.expression));
+							});
 						});
 					});
-				});
-			}
+				}
+			});
 		}
 	}
+	// TODO: consider implementing Sandbox to execute code safely
+	/*export class Sandbox {
+		public static evaluate(code) {
+			var workerStr = `
+			onmessage = function (oEvent) {
+				postMessage({
+					"id": oEvent.data.id,
+					"evaluated": eval(oEvent.data.code)
+				});
+			}
+			`;
+			var blob = new Blob([workerStr], {type: 'application/javascript'});
+			var aListeners = [], oParser = new Worker(URL.createObjectURL(blob));
+
+			oParser.onmessage = function (oEvent) {
+				debugger;
+				if (aListeners[oEvent.data.id]) { aListeners[oEvent.data.id](oEvent.data.evaluated); }
+				delete aListeners[oEvent.data.id];
+			};
+
+
+			return (function (code, fListener) {
+				aListeners.push(fListener || null);
+				oParser.postMessage({
+					"id": aListeners.length - 1,
+					"code": code
+				});
+			})(code, function(data){ console.log(data); });
+
+		}
+	}*/
 }

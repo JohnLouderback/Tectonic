@@ -8,3 +8,5 @@ for (var guiClass in App) {
 	}
 }
 App.initialize();
+
+window['App'] = App;

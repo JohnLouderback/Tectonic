@@ -121,7 +121,7 @@ export class Dom {
 							return notAlreadyInModel;
 						}())) {
 
-						let SubscribedAttrTemplate:SubscribedAttrTemplate = {
+						var SubscribedAttrTemplate:SubscribedAttrTemplate = {
 							element  : el,
 							attribute: attribute
 						};

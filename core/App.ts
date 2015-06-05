@@ -27,7 +27,11 @@ class App {
 	public static elementToModelMap: Map<string, Array<SubscribedAttrTemplate|Node>> = new Map([['', []]]);
 	public static subscribedElementsToModelMap: Map<string, Array<SubscribedElement>> = new Map([['', []]]);
 	public static set model(value: Object) {
-		App.internalModelWrapper.model = value;
+		for (var key in value) {
+			if (value.hasOwnProperty(key)) {
+				App.internalModelWrapper.model[key] = value[key]
+			}
+		}
 		App.Utils.Observe.observeObjects(false, App.internalModelWrapper);
 	}
 	public static get model(): Object {

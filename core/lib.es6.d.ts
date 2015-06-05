@@ -1,3 +1,10 @@
+declare var require;
+
+interface Window {
+	eval: Function;
+	require: Function;
+}
+
 interface Symbol {
 	/** Returns a string representation of an object. */
 	toString(): string;
@@ -145,3 +152,196 @@ interface MapConstructor {
 	prototype: Map<any, any>;
 }
 declare var Map: MapConstructor;
+
+interface String {
+	/** Iterator */
+	[Symbol.iterator](): IterableIterator<string>;
+
+	/**
+	 * Returns a nonnegative integer Number less than 1114112 (0x110000) that is the code point
+	 * value of the UTF-16 encoded code point starting at the string element at position pos in
+	 * the String resulting from converting this object to a String.
+	 * If there is no element at that position, the result is undefined.
+	 * If a valid UTF-16 surrogate pair does not begin at pos, the result is the code unit at pos.
+	 */
+	codePointAt(pos: number): number;
+
+	/**
+	 * Returns true if searchString appears as a substring of the result of converting this
+	 * object to a String, at one or more positions that are
+	 * greater than or equal to position; otherwise, returns false.
+	 * @param searchString search string
+	 * @param position If position is undefined, 0 is assumed, so as to search all of the String.
+	 */
+	contains(searchString: string, position?: number): boolean;
+
+	/**
+	 * Returns true if the sequence of elements of searchString converted to a String is the
+	 * same as the corresponding elements of this object (converted to a String) starting at
+	 * endPosition – length(this). Otherwise returns false.
+	 */
+	endsWith(searchString: string, endPosition?: number): boolean;
+
+	/**
+	 * Returns the String value result of normalizing the string into the normalization form
+	 * named by form as specified in Unicode Standard Annex #15, Unicode Normalization Forms.
+	 * @param form Applicable values: "NFC", "NFD", "NFKC", or "NFKD", If not specified default
+	 * is "NFC"
+	 */
+	normalize(form?: string): string;
+
+	/**
+	 * Returns a String value that is made from count copies appended together. If count is 0,
+	 * T is the empty String is returned.
+	 * @param count number of copies to append
+	 */
+	repeat(count: number): string;
+
+	/**
+	 * Returns true if the sequence of elements of searchString converted to a String is the
+	 * same as the corresponding elements of this object (converted to a String) starting at
+	 * position. Otherwise returns false.
+	 */
+	startsWith(searchString: string, position?: number): boolean;
+
+	/**
+	 * Returns an <a> HTML anchor element and sets the name attribute to the text value
+	 * @param name
+	 */
+	anchor(name: string): string;
+
+	/** Returns a <big> HTML element */
+	big(): string;
+
+	/** Returns a <blink> HTML element */
+	blink(): string;
+
+	/** Returns a <b> HTML element */
+	bold(): string;
+
+	/** Returns a <tt> HTML element */
+	fixed(): string
+
+	/** Returns a <font> HTML element and sets the color attribute value */
+	fontcolor(color: string): string
+
+	/** Returns a <font> HTML element and sets the size attribute value */
+	fontsize(size: number): string;
+
+	/** Returns a <font> HTML element and sets the size attribute value */
+	fontsize(size: string): string;
+
+	/** Returns an <i> HTML element */
+	italics(): string;
+
+	/** Returns an <a> HTML element and sets the href attribute value */
+	link(url: string): string;
+
+	/** Returns a <small> HTML element */
+	small(): string;
+
+	/** Returns a <strike> HTML element */
+	strike(): string;
+
+	/** Returns a <sub> HTML element */
+	sub(): string;
+
+	/** Returns a <sup> HTML element */
+	sup(): string;
+}
+
+interface PromiseLike<T> {
+	/**
+	 * Attaches callbacks for the resolution and/or rejection of the Promise.
+	 * @param onfulfilled The callback to execute when the Promise is resolved.
+	 * @param onrejected The callback to execute when the Promise is rejected.
+	 * @returns A Promise for the completion of which ever callback is executed.
+	 */
+	then<TResult>(onfulfilled?: (value: T) => TResult | PromiseLike<TResult>, onrejected?: (reason: any) => TResult | PromiseLike<TResult>): PromiseLike<TResult>;
+	then<TResult>(onfulfilled?: (value: T) => TResult | PromiseLike<TResult>, onrejected?: (reason: any) => void): PromiseLike<TResult>;
+}
+
+/**
+ * Represents the completion of an asynchronous operation
+ */
+interface Promise<T> {
+	/**
+	 * Attaches callbacks for the resolution and/or rejection of the Promise.
+	 * @param onfulfilled The callback to execute when the Promise is resolved.
+	 * @param onrejected The callback to execute when the Promise is rejected.
+	 * @returns A Promise for the completion of which ever callback is executed.
+	 */
+	then<TResult>(onfulfilled?: (value: T) => TResult | PromiseLike<TResult>, onrejected?: (reason: any) => TResult | PromiseLike<TResult>): Promise<TResult>;
+	then<TResult>(onfulfilled?: (value: T) => TResult | PromiseLike<TResult>, onrejected?: (reason: any) => void): Promise<TResult>;
+
+	/**
+	 * Attaches a callback for only the rejection of the Promise.
+	 * @param onrejected The callback to execute when the Promise is rejected.
+	 * @returns A Promise for the completion of the callback.
+	 */
+	catch(onrejected?: (reason: any) => T | PromiseLike<T>): Promise<T>;
+
+	[Symbol.toStringTag]: string;
+}
+
+interface PromiseConstructor {
+	/**
+	 * A reference to the prototype.
+	 */
+	prototype: Promise<any>;
+
+	/**
+	 * Creates a new Promise.
+	 * @param executor A callback used to initialize the promise. This callback is passed two arguments:
+	 * a resolve callback used resolve the promise with a value or the result of another promise,
+	 * and a reject callback used to reject the promise with a provided reason or error.
+	 */
+	new <T>(executor: (resolve: (value?: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): Promise<T>;
+
+	/**
+	 * Creates a Promise that is resolved with an array of results when all of the provided Promises
+	 * resolve, or rejected when any Promise is rejected.
+	 * @param values An array of Promises.
+	 * @returns A new Promise.
+	 */
+	all<T>(values: Iterable<T | PromiseLike<T>>): Promise<T[]>;
+
+	/**
+	 * Creates a Promise that is resolved or rejected when any of the provided Promises are resolved
+	 * or rejected.
+	 * @param values An array of Promises.
+	 * @returns A new Promise.
+	 */
+	race<T>(values: Iterable<T | PromiseLike<T>>): Promise<T>;
+
+	/**
+	 * Creates a new rejected promise for the provided reason.
+	 * @param reason The reason the promise was rejected.
+	 * @returns A new rejected Promise.
+	 */
+	reject(reason: any): Promise<void>;
+
+	/**
+	 * Creates a new rejected promise for the provided reason.
+	 * @param reason The reason the promise was rejected.
+	 * @returns A new rejected Promise.
+	 */
+	reject<T>(reason: any): Promise<T>;
+
+	/**
+	 * Creates a new resolved promise for the provided value.
+	 * @param value A promise.
+	 * @returns A promise whose internal state matches the provided promise.
+	 */
+	resolve<T>(value: T | PromiseLike<T>): Promise<T>;
+
+	/**
+	 * Creates a new resolved promise .
+	 * @returns A resolved promise.
+	 */
+	resolve(): Promise<void>;
+
+	[Symbol.species]: Function;
+}
+
+declare var Promise: PromiseConstructor;

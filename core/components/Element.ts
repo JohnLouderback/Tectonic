@@ -103,7 +103,7 @@ export class Element {
 		return (results && results.length > 1) ? results[1] : "";
 	}
 
-	protected register(): void {
+	public register(): void {
 		if (!App[this.getClassName()].registered) {
 
 			App[this.getClassName()].registered = true;

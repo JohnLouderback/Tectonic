@@ -1,5 +1,4 @@
-declare var App;
-export class Print extends Element{
+export class Print extends App.Element {
 	constructor(e?) {
 		super(e);
 		var element = this.el;

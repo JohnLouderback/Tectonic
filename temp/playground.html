@@ -1,16 +1,21 @@
-<html>
+	<html>
 	<head></head>
 	<body>
 		<app-element name="${App.model.test}">
-			Hello ${App.model.firstName + " " + App.model.lastName | toUpperCase}!<br>
-			<!--<app-print value="App.model.test | link 'http://google.com' | toUpperCase"/>-->
+			<app-if condition="App.model.lastName && App.model.firstName">
+				Hello ${App.model.firstName + " " + App.model.lastName | toUpperCase}!<br>
+			</app-if><app-else>
+				Anybody there?
+			</app-else>
 		</app-element><br>
+		<!--<app-print value="App.model.firstName | link 'http://google.com' | toUpperCase"/>-->
 		<input type="text" data-bind-to="App.model.firstName" data-bind-on="input" placeholder="First Name">
 		<br>
 		<input type="text" data-bind-to="App.model.lastName" data-bind-on="input" placeholder="Last Name">
 		<script src="tectonic.js"></script>
 		<script>
 		App.model = {
+			show: true,
 			firstName: "",
 			lastName: ""
 		}

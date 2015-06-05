@@ -1,6 +1,8 @@
 {
     "components": [
         "Element.ts",
-        "Print.ts"
+        "Print.ts",
+        "If.ts",
+        "Else.ts"
     ]
 }

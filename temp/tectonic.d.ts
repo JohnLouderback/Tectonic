@@ -40,6 +40,9 @@ declare module App {
             static setElementsToValue(elementsObject: any, modelLocation: any, value: any): void;
             static updateSubscribedElements(elementsObject: any, modelLocation: any): void;
         }
+        class Sandbox {
+            static evaluate(code: any): void;
+        }
     }
     class Dom {
         static initialize(): void;
@@ -69,5 +72,12 @@ declare module App {
     }
     class Print extends Element {
         constructor(e?: any);
+    }
+    class If extends Element {
+        constructor(e?: any);
+    }
+    class Else extends Element {
+        constructor(e?: any);
+        update(ifVal: boolean): void;
     }
 }
